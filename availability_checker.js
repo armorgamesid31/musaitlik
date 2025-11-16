@@ -138,7 +138,11 @@ function isTimeGapSufficient(time1, time2, minGap = MIN_PRESENT_GAP_MIN) {
 
 const EXPERT_RULES = {
   "Pınar": {
-    fixed_slots: [10, 12, 14, 16, 18],
+    fixed_slots: [10, 12, 14, 16, 18],  // Varsayılan (geriye dönük uyumluluk)
+    service_slots: {
+      "Protez Tırnak": ["10:00", "12:00", "14:00", "16:00", "18:00"],
+      "Kalıcı Oje": ["10:00", "10:30", "12:00", "12:30", "14:00", "14:30", "16:00", "16:30", "18:00", "18:30"]
+    },
     services: [
       "Protez Tırnak", "Medikal Manikür", "Islak Manikür",
       "Kalıcı Oje", "Kalıcı Oje + Jel Güçlendirme",
@@ -146,7 +150,11 @@ const EXPERT_RULES = {
     ]
   },
   "Ceren": {
-    fixed_slots: [10, 13, 16],
+    fixed_slots: [10, 13, 16],  // Varsayılan (geriye dönük uyumluluk)
+    service_slots: {
+      "Protez Tırnak": ["11:00", "14:00", "17:00"],
+      "Kalıcı Oje": ["11:00", "12:00", "14:00", "15:00", "17:00", "18:00"]
+    },
     services: [
       "Protez Tırnak", "Medikal Manikür",
       "Kalıcı Oje", "Kalıcı Oje + Jel Güçlendirme",
@@ -155,6 +163,7 @@ const EXPERT_RULES = {
   },
   "Sevcan": {
     fixed_slots: null,
+    service_slots: {},
     services: [
       "Islak Manikür", "Lazer Epilasyon", "Ağda",
       "Kaş Alımı", "Kaş Lifting", "Kaş Laminasyon",
@@ -525,12 +534,18 @@ function findAvailableSlots(date, expert, service, existingAppointments, staffLe
   
   const minStartTimeMinutes = (isToday && currentTime) ? timeToMinutes(currentTime) : 0;
 
-  if (expertRules.fixed_slots) {
-    for (const hour of expertRules.fixed_slots) {
-      const startTime = `${String(hour).padStart(2, '0')}:00`;
-      
+  // Servise özel slot'ları kontrol et
+  let slotsToUse = null;
+  if (expertRules.service_slots && expertRules.service_slots[sname]) {
+    slotsToUse = expertRules.service_slots[sname];  // ["10:00", "12:00", ...] formatında
+  } else if (expertRules.fixed_slots) {
+    slotsToUse = expertRules.fixed_slots.map(h => `${String(h).padStart(2, '0')}:00`);  // [10, 12, ...] -> ["10:00", "12:00", ...]
+  }
+
+  if (slotsToUse && slotsToUse.length > 0) {
+    for (const startTime of slotsToUse) {
       if (isToday && timeToMinutes(startTime) <= minStartTimeMinutes) continue;
-      
+
       const endTime = addMinutes(startTime, duration);
       if (timeToMinutes(endTime) > timeToMinutes(WORKING_HOURS.end)) continue;
 
@@ -707,32 +722,47 @@ function tryScheduleAllServices(referenceSlot, remainingServices, dateInfo, exis
   // ✅ GRUP RANDEVU MANTIK
   if (isGroup && remainingServices.length > 0) {
     const dateStr = referenceSlot.date;
-    
+
     // Paralel veya arka arkaya yerleştirme
     for (const service of remainingServices) {
       const sname = normalizeServiceName(service.name);
-      if (scheduled.some(a => a.service === sname)) continue;
+
+      // ✅ FİX: Aynı servisi farklı kişiler için ayırt et
+      if (scheduled.some(a => a.service === sname && a.for_person === service.for_person)) continue;
 
       const eligible = eligibleExpertsForService(sname, serviceInfo).filter(ex => getServiceDetails(serviceInfo, sname, ex));
       if (eligible.length === 0) return null;  // Grup = hepsi veya hiçbiri
 
       let placed = false;
-      
+
       // 1. PARALEL DENEME (Aynı uzman değilse)
       if (!sameExpertInfo.sameExpert) {
         for (const ex of eligible) {
           // Referans slot ile çakışan slotlar bul
           const allSlots = findAvailableSlots(dateStr, ex, { name: sname }, existingAppointments, staffLeaves, serviceInfo, filters, currentTime);
-          
+
           for (const slot of allSlots) {
             const overlap = calculateOverlap(referenceSlot, slot);
-            
+
             // 15+ dk çakışma var mı?
             if (overlap >= MIN_PARALLEL_OVERLAP_MIN) {
-              if (!isExpertOnLeave(ex, dateStr, slot, staffLeaves) &&
-                  !hasAppointmentConflict(dateStr, ex, slot, existingAppointments) &&
-                  !conflictsWithScheduled(dateStr, slot, scheduled.slice(1))) {  // Referans hariç
-                
+              const onLeave = isExpertOnLeave(ex, dateStr, slot, staffLeaves);
+              const hasConflict = hasAppointmentConflict(dateStr, ex, slot, existingAppointments);
+
+              // ✅ FİX: Aynı uzman aynı slotta olamaz
+              const conflictsScheduled = scheduled.some(s => {
+                if (s.date !== dateStr) return false;
+                const sStart = timeToMinutes(s.start);
+                const sEnd = timeToMinutes(s.end);
+                const slotStart = timeToMinutes(slot.start);
+                const slotEnd = timeToMinutes(slot.end);
+                // Aynı uzman aynı slotta ise çakışma var
+                if (canonicalExpert(ex) === s.expert && sStart === slotStart && sEnd === slotEnd) return true;
+                // Farklı uzmanlar için normal çakışma kontrolü gerekli değil (paralel olabilir)
+                return false;
+              });
+
+              if (!onLeave && !hasConflict && !conflictsScheduled) {
                 const det = getServiceDetails(serviceInfo, sname, ex);
                 if (!det) continue;
 
