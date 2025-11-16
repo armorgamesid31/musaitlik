@@ -733,10 +733,15 @@ function tryScheduleAllServices(referenceSlot, remainingServices, dateInfo, exis
       let eligible = eligibleExpertsForService(sname, serviceInfo).filter(ex => getServiceDetails(serviceInfo, sname, ex));
       if (eligible.length === 0) return null;  // Grup = hepsi veya hiçbiri
 
-      // ✅ FİX: Aynı uzman zorunluysa, sadece o uzmanı kullan
+      // ✅ IMPROVED: Tercih edilen uzmanı önceliklendir (ama diğerlerini de dahil et - kullanıcı deneyimi)
       if (sameExpertInfo.sameExpert && sameExpertInfo.expert) {
-        eligible = eligible.filter(ex => normalizeExpertName(ex) === normalizeExpertName(sameExpertInfo.expert));
-        if (eligible.length === 0) return null;  // Belirtilen uzman bu servisi yapamıyor
+        const preferredExpert = sameExpertInfo.expert;
+        const normalized = normalizeExpertName(preferredExpert);
+        // Tercih edilen uzmanı başa al
+        eligible = [
+          ...eligible.filter(ex => normalizeExpertName(ex) === normalized),
+          ...eligible.filter(ex => normalizeExpertName(ex) !== normalized)
+        ];
       }
 
       let placed = false;
@@ -1120,12 +1125,37 @@ function hourScore(absHourDiff) {
 }
 
 function expertScoreForCombo(combo, services) {
-  const nailServices = ["Protez Tırnak","Kalıcı Oje","Kalıcı Oje + Jel Güçlendirme"];
-  const nailInCombo = combo.appointments.find(a => nailServices.includes(a.service));
-  if (!nailInCombo) return 0;
-  const userPref = (services.find(s => nailServices.includes(s.name)) || {}).expert_preference || null;
-  if (!userPref) return 24;
-  return (nailInCombo.expert === canonicalExpert(userPref)) ? 30 : 18;
+  let totalScore = 0;
+  let matchCount = 0;
+  let totalPrefs = 0;
+
+  // Her randevu için tercih kontrolü yap
+  for (const apt of combo.appointments) {
+    const matchingService = services.find(s =>
+      normalizeServiceName(s.name) === apt.service &&
+      (s.for_person === apt.for_person || !s.for_person)
+    );
+
+    if (matchingService?.expert_preference) {
+      totalPrefs++;
+      const preferredExpert = canonicalExpert(matchingService.expert_preference);
+      if (apt.expert === preferredExpert) {
+        matchCount++;
+        totalScore += 15;  // Tercih edilen uzmana bonus
+      } else {
+        totalScore += 5;   // Tercih edilmeyen ama uygun uzman
+      }
+    } else {
+      totalScore += 10;  // Tercih yok, herhangi bir uzman
+    }
+  }
+
+  // Tüm tercihler tutturulduysa ekstra bonus
+  if (totalPrefs > 0 && matchCount === totalPrefs) {
+    totalScore += 10;
+  }
+
+  return totalScore;
 }
 
 function parallelScore(combo) {
@@ -1944,15 +1974,16 @@ function main() {
 
   let referenceExperts = eligibleExpertsForService(referenceService.name, serviceInfo);
 
-  // ✅ FİX: Aynı uzman zorunluysa, sadece o uzmanı kullan
+  // ✅ IMPROVED: Tercih edilen uzmanı önceliklendir (filtrele değil)
   const sameExpertInfo = effectiveConstraints?.same_expert_info || { sameExpert: false };
-  if (sameExpertInfo.sameExpert && sameExpertInfo.expert) {
-    referenceExperts = referenceExperts.filter(ex => normalizeExpertName(ex) === normalizeExpertName(sameExpertInfo.expert));
-  } else if (isNailAnchor(referenceService.name)) {
+
+  if (isNailAnchor(referenceService.name)) {
     if (filters?.nail_expert_strict && Array.isArray(filters.allowed_nail_experts) && filters.allowed_nail_experts.length) {
       const allowedCanon = filters.allowed_nail_experts.map(canonicalExpert);
       referenceExperts = referenceExperts.filter(ex => allowedCanon.some(a => normalizeExpertName(a) === normalizeExpertName(ex)));
     }
+
+    // Tercih edilen uzmanı en başa al (ama diğerlerini eleme - kullanıcı deneyimi için)
     const pref = referenceService.expert_preference ? canonicalExpert(referenceService.expert_preference) : null;
     if (pref) {
       referenceExperts = [pref, ...referenceExperts.filter(e => normalizeExpertName(e) !== normalizeExpertName(pref))];
@@ -2050,12 +2081,12 @@ function main() {
     }
     
     return selected;
-  })(deduped, 3);
+  })(deduped, 5);  // ✅ 3 yerine 5 seçenek
 
-  const top3 = topPicked;
+  const top5 = topPicked;
 
-  // ✅ OUTPUT FORMATI: Nested group_appointments
-  const options = top3.map((combo, index) => ({
+  // ✅ En iyi 10 seçeneği de al (sıralı liste)
+  const top10All = deduped.slice(0, 10).map((combo, index) => ({
     id: index + 1,
     score: combo.score,
     complete: combo.complete,
@@ -2079,7 +2110,37 @@ function main() {
     alternative_message: combo.missing_services?.length > 0 ? `${combo.missing_services.join(", ")} için farklı tarihte müsaitlik kontrolü yapabilirim.` : null
   }));
 
-  return [{ json: { status: "success", options, follow_up_question: generateFollowUpQuestion(options) } }];
+  // ✅ OUTPUT FORMATI: Nested group_appointments
+  const options = top5.map((combo, index) => ({
+    id: index + 1,
+    score: combo.score,
+    complete: combo.complete,
+    group_appointments: combo.appointments.map(apt => ({
+      for_person: apt.for_person || "self",
+      appointment: {
+        date: apt.date,
+        day_name: getDayName(parseTurkishDate(apt.date)),
+        start_time: apt.start,
+        end_time: apt.end,
+        service: apt.service,
+        expert: apt.expert,
+        price: apt.price,
+        duration: apt.duration
+      }
+    })),
+    total_price: combo.total_price,
+    total_duration: combo.total_duration,
+    arrangement: combo.arrangement || "single",
+    missing_services: combo.missing_services || [],
+    alternative_message: combo.missing_services?.length > 0 ? `${combo.missing_services.join(", ")} için farklı tarihte müsaitlik kontrolü yapabilirim.` : null
+  }));
+
+  return [{ json: {
+    status: "success",
+    options,
+    top_10_all_options: top10All,  // ✅ En iyi 10 seçenek (ayrı field)
+    follow_up_question: generateFollowUpQuestion(options)
+  } }];
 }
 
 return main();
