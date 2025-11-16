@@ -749,16 +749,19 @@ function tryScheduleAllServices(referenceSlot, remainingServices, dateInfo, exis
               const onLeave = isExpertOnLeave(ex, dateStr, slot, staffLeaves);
               const hasConflict = hasAppointmentConflict(dateStr, ex, slot, existingAppointments);
 
-              // ✅ FİX: Aynı uzman aynı slotta olamaz
+              // ✅ FİX: Aynı uzman çakışan slotta olamaz
               const conflictsScheduled = scheduled.some(s => {
                 if (s.date !== dateStr) return false;
-                const sStart = timeToMinutes(s.start);
-                const sEnd = timeToMinutes(s.end);
-                const slotStart = timeToMinutes(slot.start);
-                const slotEnd = timeToMinutes(slot.end);
-                // Aynı uzman aynı slotta ise çakışma var
-                if (canonicalExpert(ex) === s.expert && sStart === slotStart && sEnd === slotEnd) return true;
-                // Farklı uzmanlar için normal çakışma kontrolü gerekli değil (paralel olabilir)
+                // Aynı uzman için zaman çakışması kontrolü
+                if (canonicalExpert(ex) === s.expert) {
+                  const sStart = timeToMinutes(s.start);
+                  const sEnd = timeToMinutes(s.end);
+                  const slotStart = timeToMinutes(slot.start);
+                  const slotEnd = timeToMinutes(slot.end);
+                  // Çakışma var mı? (slotStart < sEnd && slotEnd > sStart)
+                  return slotStart < sEnd && slotEnd > sStart;
+                }
+                // Farklı uzmanlar için çakışma kontrolü gerekli değil (paralel olabilir)
                 return false;
               });
 
