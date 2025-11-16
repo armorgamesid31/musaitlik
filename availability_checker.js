@@ -730,8 +730,14 @@ function tryScheduleAllServices(referenceSlot, remainingServices, dateInfo, exis
       // ✅ FİX: Aynı servisi farklı kişiler için ayırt et
       if (scheduled.some(a => a.service === sname && a.for_person === service.for_person)) continue;
 
-      const eligible = eligibleExpertsForService(sname, serviceInfo).filter(ex => getServiceDetails(serviceInfo, sname, ex));
+      let eligible = eligibleExpertsForService(sname, serviceInfo).filter(ex => getServiceDetails(serviceInfo, sname, ex));
       if (eligible.length === 0) return null;  // Grup = hepsi veya hiçbiri
+
+      // ✅ FİX: Aynı uzman zorunluysa, sadece o uzmanı kullan
+      if (sameExpertInfo.sameExpert && sameExpertInfo.expert) {
+        eligible = eligible.filter(ex => normalizeExpertName(ex) === normalizeExpertName(sameExpertInfo.expert));
+        if (eligible.length === 0) return null;  // Belirtilen uzman bu servisi yapamıyor
+      }
 
       let placed = false;
 
@@ -1937,7 +1943,12 @@ function main() {
   const referenceService = services.find(s => isNailAnchor(s.name)) || services[0];
 
   let referenceExperts = eligibleExpertsForService(referenceService.name, serviceInfo);
-  if (isNailAnchor(referenceService.name)) {
+
+  // ✅ FİX: Aynı uzman zorunluysa, sadece o uzmanı kullan
+  const sameExpertInfo = effectiveConstraints?.same_expert_info || { sameExpert: false };
+  if (sameExpertInfo.sameExpert && sameExpertInfo.expert) {
+    referenceExperts = referenceExperts.filter(ex => normalizeExpertName(ex) === normalizeExpertName(sameExpertInfo.expert));
+  } else if (isNailAnchor(referenceService.name)) {
     if (filters?.nail_expert_strict && Array.isArray(filters.allowed_nail_experts) && filters.allowed_nail_experts.length) {
       const allowedCanon = filters.allowed_nail_experts.map(canonicalExpert);
       referenceExperts = referenceExperts.filter(ex => allowedCanon.some(a => normalizeExpertName(a) === normalizeExpertName(ex)));
