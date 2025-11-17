@@ -1,0 +1,714 @@
+{
+  "description": "Availability Checker Sub-Tool - Structured JSON Input/Output Examples",
+  "architecture": "function_calling",
+  "note": "This agent receives structured intents from a main customer-facing agent and returns structured availability results",
+
+  "examples": [
+    {
+      "name": "Basit Tek Kişi Randevu - Tercih Edilen Uzman Müsait",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Kalıcı Oje",
+              "expert_preference": "Ceren",
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "time_preference": {
+            "hint": null,
+            "window": null,
+            "strict": false
+          },
+          "booking_type": "single",
+          "current_time": "14:30"
+        }
+      },
+      "output": {
+        "status": "success",
+        "availability_found": true,
+        "options_count": 5,
+        "top_options": [
+          {
+            "option_id": 1,
+            "score": 50,
+            "recommended": true,
+            "summary": {
+              "date": "20/11/2025",
+              "day": "Perşembe",
+              "time_range": "11:00-13:00",
+              "total_duration": 120,
+              "total_price": 850,
+              "arrangement": "single"
+            },
+            "appointments": [
+              {
+                "for_person": "self",
+                "service": "Kalıcı Oje",
+                "expert": "Ceren",
+                "date": "20/11/2025",
+                "start_time": "11:00",
+                "end_time": "13:00",
+                "duration": 120,
+                "price": 850
+              }
+            ],
+            "match_quality": {
+              "expert_match": true,
+              "time_match": "any",
+              "date_match": "exact"
+            }
+          },
+          {
+            "option_id": 2,
+            "score": 50,
+            "summary": {
+              "date": "20/11/2025",
+              "day": "Perşembe",
+              "time_range": "14:00-16:00",
+              "total_duration": 120,
+              "total_price": 850
+            },
+            "appointments": [
+              {
+                "for_person": "self",
+                "service": "Kalıcı Oje",
+                "expert": "Ceren",
+                "date": "20/11/2025",
+                "start_time": "14:00",
+                "end_time": "16:00",
+                "duration": 120,
+                "price": 850
+              }
+            ],
+            "match_quality": {
+              "expert_match": true,
+              "time_match": "any",
+              "date_match": "exact"
+            }
+          }
+        ],
+        "all_options": [
+          "... top 10 tüm seçenekler (yukarıdaki formatın aynısı)"
+        ],
+        "metadata": {
+          "total_combinations_found": 12,
+          "search_range": "20/11/2025",
+          "filters_applied": ["expert_preference"],
+          "alternatives_included": false
+        }
+      }
+    },
+
+    {
+      "name": "Grup Randevu (2 Kişi) - Aynı Gün, Farklı Uzmanlar",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Kalıcı Oje",
+              "expert_preference": null,
+              "for_person": "self"
+            },
+            {
+              "service_name": "Kalıcı Oje",
+              "expert_preference": null,
+              "for_person": "other_1"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "time_preference": {
+            "hint": "akşam",
+            "window": {
+              "start": "18:00",
+              "end": "20:00"
+            },
+            "strict": false
+          },
+          "booking_type": "group",
+          "same_day_required": true,
+          "current_time": "14:30"
+        }
+      },
+      "output": {
+        "status": "success",
+        "availability_found": true,
+        "options_count": 5,
+        "top_options": [
+          {
+            "option_id": 1,
+            "score": 50,
+            "recommended": true,
+            "summary": {
+              "date": "20/11/2025",
+              "day": "Perşembe",
+              "time_range": "18:00-20:00",
+              "total_duration": 210,
+              "total_price": 1700,
+              "arrangement": "parallel"
+            },
+            "appointments": [
+              {
+                "for_person": "self",
+                "service": "Kalıcı Oje",
+                "expert": "Ceren",
+                "date": "20/11/2025",
+                "start_time": "18:00",
+                "end_time": "20:00",
+                "duration": 120,
+                "price": 850
+              },
+              {
+                "for_person": "other_1",
+                "service": "Kalıcı Oje",
+                "expert": "Pınar",
+                "date": "20/11/2025",
+                "start_time": "18:00",
+                "end_time": "19:30",
+                "duration": 90,
+                "price": 850
+              }
+            ],
+            "match_quality": {
+              "expert_match": null,
+              "time_match": "exact",
+              "date_match": "exact"
+            }
+          },
+          {
+            "option_id": 2,
+            "score": 48,
+            "summary": {
+              "date": "20/11/2025",
+              "day": "Perşembe",
+              "time_range": "17:00-19:00",
+              "total_duration": 120,
+              "total_price": 1700,
+              "arrangement": "sequential"
+            },
+            "appointments": [
+              {
+                "for_person": "self",
+                "service": "Kalıcı Oje",
+                "expert": "Ceren",
+                "date": "20/11/2025",
+                "start_time": "17:00",
+                "end_time": "19:00",
+                "duration": 120,
+                "price": 850
+              },
+              {
+                "for_person": "other_1",
+                "service": "Kalıcı Oje",
+                "expert": "Ceren",
+                "date": "20/11/2025",
+                "start_time": "19:00",
+                "end_time": "21:00",
+                "duration": 120,
+                "price": 850
+              }
+            ],
+            "match_quality": {
+              "expert_match": null,
+              "time_match": "partial",
+              "date_match": "exact"
+            }
+          }
+        ],
+        "metadata": {
+          "total_combinations_found": 45,
+          "search_range": "20/11/2025",
+          "filters_applied": ["time_window", "same_day"],
+          "alternatives_included": false
+        }
+      }
+    },
+
+    {
+      "name": "Tercih Edilen Uzman Dolu - Alternatif Öner",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Kalıcı Oje",
+              "expert_preference": "Ceren",
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "booking_type": "single",
+          "current_time": "14:30"
+        }
+      },
+      "existing_appointments": [
+        {
+          "uzman_adi": "Ceren",
+          "tarih": "20/11/2025",
+          "baslangic_saat": "10:00",
+          "bitis_saat": "20:00"
+        }
+      ],
+      "output": {
+        "status": "partial_match",
+        "availability_found": true,
+        "options_count": 5,
+        "reason": "preferred_expert_unavailable",
+        "message": "Tercih edilen uzman (Ceren) müsait değil, alternatif uzmanlar önerildi",
+        "top_options": [
+          {
+            "option_id": 1,
+            "score": 35,
+            "recommended": true,
+            "summary": {
+              "date": "20/11/2025",
+              "day": "Perşembe",
+              "time_range": "10:00-11:30",
+              "total_duration": 90,
+              "total_price": 850,
+              "arrangement": "single"
+            },
+            "appointments": [
+              {
+                "for_person": "self",
+                "service": "Kalıcı Oje",
+                "expert": "Pınar",
+                "date": "20/11/2025",
+                "start_time": "10:00",
+                "end_time": "11:30",
+                "duration": 90,
+                "price": 850
+              }
+            ],
+            "match_quality": {
+              "expert_match": false,
+              "time_match": "any",
+              "date_match": "exact"
+            }
+          }
+        ],
+        "metadata": {
+          "preferred_expert": "Ceren",
+          "alternative_experts": ["Pınar"],
+          "score_difference": 15,
+          "total_combinations_found": 8,
+          "alternatives_included": true
+        },
+        "suggestion": "Farklı tarih aralığı deneyin veya Pınar uzmanını kabul edin"
+      }
+    },
+
+    {
+      "name": "Pazar Günü (Salon Kapalı)",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Kalıcı Oje",
+              "expert_preference": null,
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "23/11/2025"
+          },
+          "booking_type": "single",
+          "current_time": "14:30"
+        }
+      },
+      "output": {
+        "status": "closed",
+        "availability_found": false,
+        "reason": "salon_closed",
+        "message": "Salon seçilen günde kapalı",
+        "closed_date": "23/11/2025",
+        "closed_day": "Pazar",
+        "suggestions": [
+          {
+            "type": "next_available_day",
+            "suggestion": "En yakın müsait gün: Pazartesi 24/11/2025"
+          },
+          {
+            "type": "previous_day",
+            "suggestion": "Bir gün önce: Cumartesi 22/11/2025"
+          }
+        ]
+      }
+    },
+
+    {
+      "name": "Kombine Servisler (Aynı Gün)",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Kalıcı Oje",
+              "expert_preference": null,
+              "for_person": "self"
+            },
+            {
+              "service_name": "Kaş Alımı",
+              "expert_preference": null,
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "booking_type": "single",
+          "same_day_required": true,
+          "current_time": "14:30"
+        }
+      },
+      "output": {
+        "status": "success",
+        "availability_found": true,
+        "options_count": 5,
+        "top_options": [
+          {
+            "option_id": 1,
+            "score": 50,
+            "recommended": true,
+            "summary": {
+              "date": "20/11/2025",
+              "day": "Perşembe",
+              "time_range": "10:00-11:30",
+              "total_duration": 110,
+              "total_price": 1000,
+              "arrangement": "sequential_multi_expert"
+            },
+            "appointments": [
+              {
+                "for_person": "self",
+                "service": "Kalıcı Oje",
+                "expert": "Pınar",
+                "date": "20/11/2025",
+                "start_time": "10:00",
+                "end_time": "11:30",
+                "duration": 90,
+                "price": 850
+              },
+              {
+                "for_person": "self",
+                "service": "Kaş Alımı",
+                "expert": "Sevcan",
+                "date": "20/11/2025",
+                "start_time": "11:00",
+                "end_time": "11:20",
+                "duration": 20,
+                "price": 150
+              }
+            ],
+            "match_quality": {
+              "expert_match": null,
+              "time_match": "any",
+              "date_match": "exact"
+            }
+          }
+        ],
+        "metadata": {
+          "total_combinations_found": 32,
+          "search_range": "20/11/2025",
+          "filters_applied": ["same_day"],
+          "overlapping_services": true,
+          "note": "Kaş alımı kısa servis olduğu için kalıcı oje sırasında yapılabilir"
+        }
+      }
+    },
+
+    {
+      "name": "Strict Time Window - Müsaitlik Yok",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Protez Tırnak",
+              "expert_preference": "Ceren",
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "time_preference": {
+            "window": {
+              "start": "09:00",
+              "end": "10:00"
+            },
+            "strict": true
+          },
+          "booking_type": "single",
+          "current_time": "14:30"
+        }
+      },
+      "output": {
+        "status": "no_availability",
+        "availability_found": false,
+        "reason": "time_window_strict_no_match",
+        "message": "09:00-10:00 arası belirtilen uzman için müsaitlik yok",
+        "details": {
+          "requested_expert": "Ceren",
+          "requested_time_window": "09:00-10:00",
+          "expert_earliest_slot": "11:00",
+          "expert_slots_on_date": ["11:00", "14:00", "17:00"]
+        },
+        "suggestions": [
+          {
+            "type": "relax_time_constraint",
+            "suggestion": "Saat aralığını genişletin veya 'strict' modunu kaldırın",
+            "alternative_slots": ["11:00-14:00", "14:00-17:00", "17:00-20:00"]
+          },
+          {
+            "type": "different_expert",
+            "suggestion": "Pınar uzmanı 10:00'da müsait",
+            "available_time": "10:00-12:00"
+          },
+          {
+            "type": "different_date",
+            "suggestion": "Farklı bir gün deneyin"
+          }
+        ]
+      }
+    },
+
+    {
+      "name": "Range Search - En Erken Tarih",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Kalıcı Oje",
+              "expert_preference": "Pınar",
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "range",
+            "range": "20/11/2025 to 25/11/2025",
+            "preference": "earliest"
+          },
+          "booking_type": "single",
+          "current_time": "14:30"
+        }
+      },
+      "output": {
+        "status": "success",
+        "availability_found": true,
+        "options_count": 5,
+        "top_options": [
+          {
+            "option_id": 1,
+            "score": 50,
+            "recommended": true,
+            "summary": {
+              "date": "20/11/2025",
+              "day": "Perşembe",
+              "time_range": "10:00-11:30",
+              "total_duration": 90,
+              "total_price": 850,
+              "arrangement": "single"
+            },
+            "appointments": [
+              {
+                "for_person": "self",
+                "service": "Kalıcı Oje",
+                "expert": "Pınar",
+                "date": "20/11/2025",
+                "start_time": "10:00",
+                "end_time": "11:30",
+                "duration": 90,
+                "price": 850
+              }
+            ],
+            "match_quality": {
+              "expert_match": true,
+              "time_match": "earliest",
+              "date_match": "earliest_in_range"
+            }
+          }
+        ],
+        "metadata": {
+          "total_combinations_found": 67,
+          "search_range": "20/11/2025 to 25/11/2025",
+          "date_preference": "earliest",
+          "filters_applied": ["expert_preference", "date_range"]
+        }
+      }
+    },
+
+    {
+      "name": "Missing Service Info - Error",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "booking_type": "single"
+        }
+      },
+      "output": {
+        "status": "error",
+        "error_code": "MISSING_SERVICE",
+        "message": "Servis bilgisi eksik",
+        "required_info": ["service_name"],
+        "suggestion_to_main_agent": "Kullanıcıya 'Hangi hizmet için randevu almak istersiniz?' diye sor"
+      }
+    },
+
+    {
+      "name": "Invalid Service Name - Error",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Saç Kesimi",
+              "expert_preference": null,
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "booking_type": "single"
+        }
+      },
+      "output": {
+        "status": "error",
+        "error_code": "INVALID_SERVICE",
+        "message": "Belirtilen servis bulunamadı",
+        "invalid_field": "service_name",
+        "invalid_value": "Saç Kesimi",
+        "valid_options": [
+          "Kalıcı Oje",
+          "Protez Tırnak",
+          "İslak Manikür",
+          "Medikal Manikür",
+          "Kaş Alımı",
+          "Kaş Laminasyon",
+          "Lazer Epilasyon",
+          "Cilt Bakımı",
+          "Pedikür",
+          "Ayak Kalıcı Oje"
+        ],
+        "suggestion_to_main_agent": "Kullanıcıya geçerli servisleri göster ve seçim yaptır"
+      }
+    },
+
+    {
+      "name": "Uzman İzinde - Partial Match",
+      "input": {
+        "intent": "check_availability",
+        "user_id": "905551234567",
+        "extracted_info": {
+          "services": [
+            {
+              "service_name": "Kaş Alımı",
+              "expert_preference": "Sevcan",
+              "for_person": "self"
+            }
+          ],
+          "date_preference": {
+            "type": "specific",
+            "value": "20/11/2025"
+          },
+          "booking_type": "single"
+        }
+      },
+      "staff_leaves": [
+        {
+          "uzman_adi": "Sevcan",
+          "baslangic_tarihi": "20/11/2025",
+          "bitis_tarihi": "20/11/2025",
+          "durum": "Tam Gün",
+          "baslangic_saat": "",
+          "bitis_saat": ""
+        }
+      ],
+      "output": {
+        "status": "no_availability",
+        "availability_found": false,
+        "reason": "expert_on_leave",
+        "message": "Sevcan 20/11/2025 tarihinde izinli",
+        "details": {
+          "expert": "Sevcan",
+          "leave_date": "20/11/2025",
+          "leave_type": "Tam Gün"
+        },
+        "suggestions": [
+          {
+            "type": "different_date",
+            "suggestion": "Farklı bir tarih seçin (Sevcan 21/11/2025'te müsait)"
+          },
+          {
+            "type": "no_alternative_expert",
+            "reason": "Kaş Alımı sadece Sevcan tarafından yapılıyor"
+          }
+        ]
+      }
+    }
+  ],
+
+  "validation_rules": {
+    "required_fields": {
+      "intent": "Her zaman 'check_availability' olmalı",
+      "user_id": "Telefon numarası (905XXXXXXXXX formatı)",
+      "extracted_info.services": "En az 1 servis olmalı",
+      "extracted_info.date_preference": "Tarih bilgisi zorunlu"
+    },
+    "optional_fields": {
+      "expert_preference": "null veya geçerli uzman adı",
+      "time_preference": "null veya time window objesi",
+      "booking_type": "Varsayılan: 'single'"
+    }
+  },
+
+  "output_status_types": {
+    "success": "Müsaitlik bulundu ve tüm tercihler karşılandı",
+    "partial_match": "Müsaitlik bulundu ama bazı tercihler karşılanmadı (örn: farklı uzman)",
+    "no_availability": "Hiç müsaitlik bulunamadı",
+    "closed": "Salon kapalı",
+    "error": "Input hatası veya sistem hatası"
+  },
+
+  "scoring_logic": {
+    "base_score": 30,
+    "date_proximity_bonus": "0-10 puan (yakın tarih = yüksek puan)",
+    "time_match_bonus": "0-10 puan (istenen saate yakınlık)",
+    "expert_match_bonus": "+15 tercih edilen uzman, +5 alternatif, +10 tercih yok",
+    "all_preferences_matched_bonus": "+10 tüm tercihler karşılandıysa",
+    "max_score": 50
+  }
+}
