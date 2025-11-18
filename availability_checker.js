@@ -138,7 +138,11 @@ function isTimeGapSufficient(time1, time2, minGap = MIN_PRESENT_GAP_MIN) {
 
 const EXPERT_RULES = {
   "Pınar": {
-    fixed_slots: [10, 12, 14, 16, 18],
+    fixed_slots: [10, 12, 14, 16, 18],  // Varsayılan (geriye dönük uyumluluk)
+    service_slots: {
+      "Protez Tırnak": ["10:00", "12:00", "14:00", "16:00", "18:00"],
+      "Kalıcı Oje": ["10:00", "10:30", "12:00", "12:30", "14:00", "14:30", "16:00", "16:30", "18:00", "18:30"]
+    },
     services: [
       "Protez Tırnak", "Medikal Manikür", "Islak Manikür",
       "Kalıcı Oje", "Kalıcı Oje + Jel Güçlendirme",
@@ -146,7 +150,11 @@ const EXPERT_RULES = {
     ]
   },
   "Ceren": {
-    fixed_slots: [10, 13, 16],
+    fixed_slots: [10, 13, 16],  // Varsayılan (geriye dönük uyumluluk)
+    service_slots: {
+      "Protez Tırnak": ["11:00", "14:00", "17:00"],
+      "Kalıcı Oje": ["11:00", "12:00", "14:00", "15:00", "17:00", "18:00"]
+    },
     services: [
       "Protez Tırnak", "Medikal Manikür",
       "Kalıcı Oje", "Kalıcı Oje + Jel Güçlendirme",
@@ -155,6 +163,7 @@ const EXPERT_RULES = {
   },
   "Sevcan": {
     fixed_slots: null,
+    service_slots: {},
     services: [
       "Islak Manikür", "Lazer Epilasyon", "Ağda",
       "Kaş Alımı", "Kaş Lifting", "Kaş Laminasyon",
@@ -525,12 +534,18 @@ function findAvailableSlots(date, expert, service, existingAppointments, staffLe
   
   const minStartTimeMinutes = (isToday && currentTime) ? timeToMinutes(currentTime) : 0;
 
-  if (expertRules.fixed_slots) {
-    for (const hour of expertRules.fixed_slots) {
-      const startTime = `${String(hour).padStart(2, '0')}:00`;
-      
+  // Servise özel slot'ları kontrol et
+  let slotsToUse = null;
+  if (expertRules.service_slots && expertRules.service_slots[sname]) {
+    slotsToUse = expertRules.service_slots[sname];  // ["10:00", "12:00", ...] formatında
+  } else if (expertRules.fixed_slots) {
+    slotsToUse = expertRules.fixed_slots.map(h => `${String(h).padStart(2, '0')}:00`);  // [10, 12, ...] -> ["10:00", "12:00", ...]
+  }
+
+  if (slotsToUse && slotsToUse.length > 0) {
+    for (const startTime of slotsToUse) {
       if (isToday && timeToMinutes(startTime) <= minStartTimeMinutes) continue;
-      
+
       const endTime = addMinutes(startTime, duration);
       if (timeToMinutes(endTime) > timeToMinutes(WORKING_HOURS.end)) continue;
 
@@ -707,32 +722,61 @@ function tryScheduleAllServices(referenceSlot, remainingServices, dateInfo, exis
   // ✅ GRUP RANDEVU MANTIK
   if (isGroup && remainingServices.length > 0) {
     const dateStr = referenceSlot.date;
-    
+
     // Paralel veya arka arkaya yerleştirme
     for (const service of remainingServices) {
       const sname = normalizeServiceName(service.name);
-      if (scheduled.some(a => a.service === sname)) continue;
 
-      const eligible = eligibleExpertsForService(sname, serviceInfo).filter(ex => getServiceDetails(serviceInfo, sname, ex));
+      // ✅ FİX: Aynı servisi farklı kişiler için ayırt et
+      if (scheduled.some(a => a.service === sname && a.for_person === service.for_person)) continue;
+
+      let eligible = eligibleExpertsForService(sname, serviceInfo).filter(ex => getServiceDetails(serviceInfo, sname, ex));
       if (eligible.length === 0) return null;  // Grup = hepsi veya hiçbiri
 
+      // ✅ IMPROVED: Tercih edilen uzmanı önceliklendir (ama diğerlerini de dahil et - kullanıcı deneyimi)
+      if (sameExpertInfo.sameExpert && sameExpertInfo.expert) {
+        const preferredExpert = sameExpertInfo.expert;
+        const normalized = normalizeExpertName(preferredExpert);
+        // Tercih edilen uzmanı başa al
+        eligible = [
+          ...eligible.filter(ex => normalizeExpertName(ex) === normalized),
+          ...eligible.filter(ex => normalizeExpertName(ex) !== normalized)
+        ];
+      }
+
       let placed = false;
-      
+
       // 1. PARALEL DENEME (Aynı uzman değilse)
       if (!sameExpertInfo.sameExpert) {
         for (const ex of eligible) {
           // Referans slot ile çakışan slotlar bul
           const allSlots = findAvailableSlots(dateStr, ex, { name: sname }, existingAppointments, staffLeaves, serviceInfo, filters, currentTime);
-          
+
           for (const slot of allSlots) {
             const overlap = calculateOverlap(referenceSlot, slot);
-            
+
             // 15+ dk çakışma var mı?
             if (overlap >= MIN_PARALLEL_OVERLAP_MIN) {
-              if (!isExpertOnLeave(ex, dateStr, slot, staffLeaves) &&
-                  !hasAppointmentConflict(dateStr, ex, slot, existingAppointments) &&
-                  !conflictsWithScheduled(dateStr, slot, scheduled.slice(1))) {  // Referans hariç
-                
+              const onLeave = isExpertOnLeave(ex, dateStr, slot, staffLeaves);
+              const hasConflict = hasAppointmentConflict(dateStr, ex, slot, existingAppointments);
+
+              // ✅ FİX: Aynı uzman çakışan slotta olamaz
+              const conflictsScheduled = scheduled.some(s => {
+                if (s.date !== dateStr) return false;
+                // Aynı uzman için zaman çakışması kontrolü
+                if (canonicalExpert(ex) === s.expert) {
+                  const sStart = timeToMinutes(s.start);
+                  const sEnd = timeToMinutes(s.end);
+                  const slotStart = timeToMinutes(slot.start);
+                  const slotEnd = timeToMinutes(slot.end);
+                  // Çakışma var mı? (slotStart < sEnd && slotEnd > sStart)
+                  return slotStart < sEnd && slotEnd > sStart;
+                }
+                // Farklı uzmanlar için çakışma kontrolü gerekli değil (paralel olabilir)
+                return false;
+              });
+
+              if (!onLeave && !hasConflict && !conflictsScheduled) {
                 const det = getServiceDetails(serviceInfo, sname, ex);
                 if (!det) continue;
 
@@ -1081,12 +1125,37 @@ function hourScore(absHourDiff) {
 }
 
 function expertScoreForCombo(combo, services) {
-  const nailServices = ["Protez Tırnak","Kalıcı Oje","Kalıcı Oje + Jel Güçlendirme"];
-  const nailInCombo = combo.appointments.find(a => nailServices.includes(a.service));
-  if (!nailInCombo) return 0;
-  const userPref = (services.find(s => nailServices.includes(s.name)) || {}).expert_preference || null;
-  if (!userPref) return 24;
-  return (nailInCombo.expert === canonicalExpert(userPref)) ? 30 : 18;
+  let totalScore = 0;
+  let matchCount = 0;
+  let totalPrefs = 0;
+
+  // Her randevu için tercih kontrolü yap
+  for (const apt of combo.appointments) {
+    const matchingService = services.find(s =>
+      normalizeServiceName(s.name) === apt.service &&
+      (s.for_person === apt.for_person || !s.for_person)
+    );
+
+    if (matchingService?.expert_preference) {
+      totalPrefs++;
+      const preferredExpert = canonicalExpert(matchingService.expert_preference);
+      if (apt.expert === preferredExpert) {
+        matchCount++;
+        totalScore += 15;  // Tercih edilen uzmana bonus
+      } else {
+        totalScore += 5;   // Tercih edilmeyen ama uygun uzman
+      }
+    } else {
+      totalScore += 10;  // Tercih yok, herhangi bir uzman
+    }
+  }
+
+  // Tüm tercihler tutturulduysa ekstra bonus
+  if (totalPrefs > 0 && matchCount === totalPrefs) {
+    totalScore += 10;
+  }
+
+  return totalScore;
 }
 
 function parallelScore(combo) {
@@ -1904,11 +1973,17 @@ function main() {
   const referenceService = services.find(s => isNailAnchor(s.name)) || services[0];
 
   let referenceExperts = eligibleExpertsForService(referenceService.name, serviceInfo);
+
+  // ✅ IMPROVED: Tercih edilen uzmanı önceliklendir (filtrele değil)
+  const sameExpertInfo = effectiveConstraints?.same_expert_info || { sameExpert: false };
+
   if (isNailAnchor(referenceService.name)) {
     if (filters?.nail_expert_strict && Array.isArray(filters.allowed_nail_experts) && filters.allowed_nail_experts.length) {
       const allowedCanon = filters.allowed_nail_experts.map(canonicalExpert);
       referenceExperts = referenceExperts.filter(ex => allowedCanon.some(a => normalizeExpertName(a) === normalizeExpertName(ex)));
     }
+
+    // Tercih edilen uzmanı en başa al (ama diğerlerini eleme - kullanıcı deneyimi için)
     const pref = referenceService.expert_preference ? canonicalExpert(referenceService.expert_preference) : null;
     if (pref) {
       referenceExperts = [pref, ...referenceExperts.filter(e => normalizeExpertName(e) !== normalizeExpertName(pref))];
@@ -2006,12 +2081,12 @@ function main() {
     }
     
     return selected;
-  })(deduped, 3);
+  })(deduped, 5);  // ✅ 3 yerine 5 seçenek
 
-  const top3 = topPicked;
+  const top5 = topPicked;
 
-  // ✅ OUTPUT FORMATI: Nested group_appointments
-  const options = top3.map((combo, index) => ({
+  // ✅ En iyi 10 seçeneği de al (sıralı liste)
+  const top10All = deduped.slice(0, 10).map((combo, index) => ({
     id: index + 1,
     score: combo.score,
     complete: combo.complete,
@@ -2035,7 +2110,37 @@ function main() {
     alternative_message: combo.missing_services?.length > 0 ? `${combo.missing_services.join(", ")} için farklı tarihte müsaitlik kontrolü yapabilirim.` : null
   }));
 
-  return [{ json: { status: "success", options, follow_up_question: generateFollowUpQuestion(options) } }];
+  // ✅ OUTPUT FORMATI: Nested group_appointments
+  const options = top5.map((combo, index) => ({
+    id: index + 1,
+    score: combo.score,
+    complete: combo.complete,
+    group_appointments: combo.appointments.map(apt => ({
+      for_person: apt.for_person || "self",
+      appointment: {
+        date: apt.date,
+        day_name: getDayName(parseTurkishDate(apt.date)),
+        start_time: apt.start,
+        end_time: apt.end,
+        service: apt.service,
+        expert: apt.expert,
+        price: apt.price,
+        duration: apt.duration
+      }
+    })),
+    total_price: combo.total_price,
+    total_duration: combo.total_duration,
+    arrangement: combo.arrangement || "single",
+    missing_services: combo.missing_services || [],
+    alternative_message: combo.missing_services?.length > 0 ? `${combo.missing_services.join(", ")} için farklı tarihte müsaitlik kontrolü yapabilirim.` : null
+  }));
+
+  return [{ json: {
+    status: "success",
+    options,
+    top_10_all_options: top10All,  // ✅ En iyi 10 seçenek (ayrı field)
+    follow_up_question: generateFollowUpQuestion(options)
+  } }];
 }
 
 return main();
